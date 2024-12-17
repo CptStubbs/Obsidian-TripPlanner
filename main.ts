@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 
 const path = require('path');
 const rootFolder = "TripPlanner"
@@ -10,6 +10,13 @@ interface TripPlannerSettings {
 const DEFAULT_SETTINGS: TripPlannerSettings = {
 	rootFolder: 'Trips'
 }
+
+// Define the template paths
+const templatePath = path.join("Templates", "TripPlanner");
+const checkListTemplateName = "Packing List Template.md"
+const itineraryTemplateName = "Itinerary Template.md"
+const checkListTemplatePath = path.join(templatePath, checkListTemplateName)
+const itineraryTemplatePath = path.join(templatePath, itineraryTemplateName)
 
 class TripModal extends Modal {
 	constructor(app: App, onSubmit: (month: string, destination: string) => void) {
@@ -31,13 +38,18 @@ class TripModal extends Modal {
 			.setName('Destination')
 			.addText(text => text.setPlaceholder('Enter destination'));
 
+		const durationInput = new Setting(contentEl)
+			.setName('Duration')
+			.addText(text => text.setPlaceholder('Number of days'));
+
 		// Submit button
 		contentEl.createEl('button', { text: 'Submit' }).addEventListener('click', () => {
 			const month = monthInput.controlEl.querySelector('input').value;
 			const destination = destinationInput.controlEl.querySelector('input').value;
+			const duration = durationInput.controlEl.querySelector('input').value;
 
-			if (month && destination) {
-				this.onSubmit(month, destination);
+			if (month && destination && duration) {
+				this.onSubmit(month, destination, duration);
 				this.close();
 			} else {
 				new Notice('Please fill out all fields.');
@@ -70,47 +82,79 @@ export default class TripPlanner extends Plugin {
 		}
 	}
 
-    // Method to create a new note
-    async createNewNote(filePath: string, content: string) {
-        try {
-            const fileExists = this.app.vault.getAbstractFileByPath(filePath);
-            if (!fileExists) {
-                await this.app.vault.create(filePath, content);
-                new Notice(`Note "${filePath}" created successfully!`);
-            } else {
-                new Notice(`Note "${filePath}" already exists.`);
-            }
-        } catch (error) {
-            console.error("Error creating note:", error);
-            new Notice(`Failed to create note "${filePath}".`);
-        }
-    }
+	// Method to create a new note
+	async createNewNote(filePath: string, content: string) {
+		try {
+			const fileExists = this.app.vault.getAbstractFileByPath(filePath);
+			if (!fileExists) {
+				await this.app.vault.create(filePath, content);
+				new Notice(`Note "${filePath}" created successfully!`);
+			} else {
+				new Notice(`Note "${filePath}" already exists.`);
+			}
+		} catch (error) {
+			console.error("Error creating note:", error);
+			new Notice(`Failed to create note "${filePath}".`);
+		}
+	}
 
 	async onload() {
 		console.log('loading plugin')
 		await this.loadSettings();
 
 		// Add a ribbon icon to trigger the modal
-		this.addRibbonIcon('dice', 'Plan a Trip', () => {
+		this.addRibbonIcon('plane-takeoff', 'Plan a Trip', () => {
 			new TripModal(this.app, (month, destination) => {
 				new Notice(`Planning trip to ${destination} in ${month}.`);
 				let subFolder = `${destination}-${month}`;
-				let fullPath = path.join(rootFolder, subFolder);
+				let tripPath = path.join(rootFolder, subFolder);
 
-				// Create a folder with month and destination
-				this.createNewFolder(`${fullPath}`);
+				// Step 1: Create a folder with month and destination
+				this.createNewFolder(`${tripPath}`);
 
-                // Step 2: Create two new notes inside the folder
+				// Step 2: Create two new notes inside the folder
 
-                // Note 1: Trip Itinerary
-                const itineraryPath = path.join(fullPath, 'Trip Itinerary.md');
-                const itineraryContent = '# Trip Itinerary\n\nAdd your itinerary details here.';
-                this.createNewNote(itineraryPath, itineraryContent);
+				// Note 1: Packing List 
+				const packingListPath = path.join(tripPath, 'Packing List.md');
+				// Get the template file
+				const checkListTemplate = this.app.vault.getAbstractFileByPath(checkListTemplatePath);
+				if (checkListTemplate && checkListTemplate instanceof TFile) {
+					// Read the content from the template
+					this.app.vault.read(checkListTemplate)
+						.then(templateContent => {
+							// Create the new note with the template content
+							return this.app.vault.create(packingListPath, templateContent);
+						})
+						.then(() => {
+							console.log('Note created successfully.');
+						})
+						.catch(error => {
+							console.error(`Failed to create note: ${error}`);
+						});
+				} else {
+					console.error(`Template not found: ${checkListTemplatePath}`);
+				}
 
-                // Note 2: Packing List
-                const packingListPath = path.join(fullPath, 'Packing List.md');
-                const packingListContent = '# Packing List\n\nAdd your packing list here.';
-                this.createNewNote(packingListPath, packingListContent);
+				// Note 1: Trip Itinerary
+				const itineraryPath = path.join(tripPath, 'Trip Itinerary.md');
+				// Get the template file
+				const itineraryTemplate = this.app.vault.getAbstractFileByPath(itineraryTemplatePath);
+				if (itineraryTemplate && itineraryTemplate instanceof TFile) {
+					// Read the content from the template
+					this.app.vault.read(itineraryTemplate)
+						.then(templateContent => {
+							// Create the new note with the template content
+							return this.app.vault.create(itineraryPath, templateContent);
+						})
+						.then(() => {
+							console.log('Note created successfully.');
+						})
+						.catch(error => {
+							console.error(`Failed to create note: ${error}`);
+						});
+				} else {
+					console.error(`Template not found: ${itineraryPath}`);
+				}
 
 			}).open();
 		});
@@ -189,12 +233,12 @@ class SampleModal extends Modal {
 	}
 
 	onOpen() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.setText('Woah!');
 	}
 
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
@@ -208,7 +252,7 @@ class SampleSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
