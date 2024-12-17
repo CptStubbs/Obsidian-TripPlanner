@@ -1,5 +1,12 @@
 # Trip Planner For Obsidian
 
+## Dev notes
+### Build
+`npx tsc`
+
+### Run
+`npm run dev`
+
 ## TODO
 1. Add settings for templates
 2. Add functionality based on trip
